@@ -38,11 +38,17 @@
 #include "libmesh/petsc_preconditioner.h"
 #include "libmesh/petsc_vector.h"
 #include "libmesh/sparse_matrix.h"
+#include "libmesh/implicit_system.h"
+#include "libmesh/dof_map.h"
 
 // PETSc includes
 #include <petsc.h>
 #include <petscsnes.h>
 #include <petscksp.h>
+
+//For associated a block scaling vector with system matrix
+#include <petscsys.h>
+#include <petscvec.h>
 
 // For graph coloring
 #include <petscmat.h>
@@ -230,9 +236,76 @@ addPetscOptionsFromCommandline()
   }
 }
 
+
+void
+hypreSetVariableDiagonalBlockScaling(FEProblemBase & problem)
+{
+	auto & nl_sys = problem.getNonlinearSystem();
+	auto & lib_mesh_sys = nl_sys.system();
+	libMesh::ImplicitSystem * imp_sys = dynamic_cast<libMesh::ImplicitSystem *> (&lib_mesh_sys);
+
+	/*if (imp_sys){
+		std::cerr<<"Cast from System to ImplicitSystem is successful"<<std::endl;
+	} else{
+		std::cerr<<"Cast from System to ImplicitSystem failed"<<std::endl;
+	}*/
+
+	PetscMatrix<Number> * petsc_mat = dynamic_cast<PetscMatrix<Number> *>(imp_sys->matrix);
+
+	/*if (petsc_mat){
+		std::cerr<<"Cast to PetscMatrix<Number> is successful"<<std::endl;
+	} else{
+		std::cerr<<"Cast to PetscMatrix<Number> failed"<<std::endl;
+	}*/
+
+	//Mat sys_mat = petsc_mat->mat();
+	/*if (petsc_mat->mat()){
+		std::cerr<<"petsc_mat->mat() exists"<<std::endl;
+	} else{
+		std::cerr<<"petsc_mat->mat() is Null"<<std::endl;
+	}*/
+
+	/*MatView(sys_mat,PETSC_VIEWER_STDOUT_SELF);*/
+
+	// Create a vector that is compatable with the system matrix
+	Vec block_scaling;
+	MatCreateVecs(petsc_mat->mat(), &block_scaling, nullptr);
+
+	VecZeroEntries(block_scaling);
+
+	// Associate the new vector with the system matrix so that is can be retrieved later
+	// by petsc functions that only have access to the Mat object
+	PetscObjectCompose((PetscObject)petsc_mat->mat(),"block_scaling_vector",(PetscObject) block_scaling);
+
+	//
+	// Now fill the vector with information about the "blocks" based on the mesh
+	// For now, the assumption is made that no element is split amongst different
+	// processors.
+	//
+
+	const DofMap & dof_map = imp_sys->get_dof_map();
+
+	for (auto & elem: imp_sys->get_mesh().active_local_element_ptr_range()){
+
+		std::vector<unsigned int> dofs_for_elem;
+		dof_map.dof_indices(elem,dofs_for_elem);
+
+		unsigned int block_start = * std::min_element( dofs_for_elem.begin(), dofs_for_elem.end() );
+
+		VecSetValue(block_scaling,block_start,dofs_for_elem.size(),INSERT_VALUES);
+
+	}
+
+}
+
+
 void
 petscSetOptions(FEProblemBase & problem)
 {
+
+  //test new function
+	hypreSetVariableDiagonalBlockScaling(problem);
+
   // Reference to the options stored in FEPRoblem
   PetscOptions & petsc = problem.getPetscOptions();
 
@@ -633,6 +706,7 @@ petscSetDefaults(FEProblemBase & problem)
 void
 storePetscOptions(FEProblemBase & fe_problem, const InputParameters & params)
 {
+
   // Note: Options set in the Preconditioner block will override those set in the Executioner block
   if (params.isParamValid("solve_type") && !params.isParamValid("_use_eigen_value"))
   {
@@ -980,3 +1054,4 @@ colorAdjacencyMatrix(PetscScalar * adjacency_matrix,
 } // Namespace MOOSE
 
 #endif // LIBMESH_HAVE_PETSC
+
