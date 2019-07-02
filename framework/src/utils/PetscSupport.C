@@ -285,16 +285,21 @@ hypreSetVariableDiagonalBlockScaling(FEProblemBase & problem)
 
 	const DofMap & dof_map = imp_sys->get_dof_map();
 
-	for (auto & elem: imp_sys->get_mesh().active_local_element_ptr_range()){
+	//
+	//
+	//
+	unsigned int n_vars = imp_sys->n_vars();
 
-		std::vector<unsigned int> dofs_for_elem;
-		dof_map.dof_indices(elem,dofs_for_elem);
+	for (auto & elem: imp_sys->get_mesh().active_local_element_ptr_range())
+		for (unsigned int i=0; i<n_vars; ++i){
 
-		unsigned int block_start = * std::min_element( dofs_for_elem.begin(), dofs_for_elem.end() );
+			std::vector<unsigned int> dofs_for_elem;
+			dof_map.dof_indices(elem,dofs_for_elem, i);
+			unsigned int block_start = * std::min_element( dofs_for_elem.begin(), dofs_for_elem.end() );
+			VecSetValue(block_scaling,block_start,dofs_for_elem.size(),INSERT_VALUES);
 
-		VecSetValue(block_scaling,block_start,dofs_for_elem.size(),INSERT_VALUES);
+		}
 
-	}
 
 }
 
