@@ -244,28 +244,7 @@ hypreSetVariableDiagonalBlockScaling(FEProblemBase & problem)
 	auto & lib_mesh_sys = nl_sys.system();
 	libMesh::ImplicitSystem * imp_sys = dynamic_cast<libMesh::ImplicitSystem *> (&lib_mesh_sys);
 
-	/*if (imp_sys){
-		std::cerr<<"Cast from System to ImplicitSystem is successful"<<std::endl;
-	} else{
-		std::cerr<<"Cast from System to ImplicitSystem failed"<<std::endl;
-	}*/
-
 	PetscMatrix<Number> * petsc_mat = dynamic_cast<PetscMatrix<Number> *>(imp_sys->matrix);
-
-	/*if (petsc_mat){
-		std::cerr<<"Cast to PetscMatrix<Number> is successful"<<std::endl;
-	} else{
-		std::cerr<<"Cast to PetscMatrix<Number> failed"<<std::endl;
-	}*/
-
-	//Mat sys_mat = petsc_mat->mat();
-	/*if (petsc_mat->mat()){
-		std::cerr<<"petsc_mat->mat() exists"<<std::endl;
-	} else{
-		std::cerr<<"petsc_mat->mat() is Null"<<std::endl;
-	}*/
-
-	/*MatView(sys_mat,PETSC_VIEWER_STDOUT_SELF);*/
 
 	// Create a vector that is compatable with the system matrix
 	Vec block_scaling;
@@ -282,9 +261,7 @@ hypreSetVariableDiagonalBlockScaling(FEProblemBase & problem)
 	// For now, the assumption is made that no element is split amongst different
 	// processors.
 	//
-
 	const DofMap & dof_map = imp_sys->get_dof_map();
-
 	//
 	//
 	//
@@ -295,21 +272,19 @@ hypreSetVariableDiagonalBlockScaling(FEProblemBase & problem)
 
 			std::vector<unsigned int> dofs_for_elem;
 			dof_map.dof_indices(elem,dofs_for_elem, i);
+
+			//for (int jj=0 ; jj<dofs_for_elem.size(); ++jj)
+			//	fprintf(stderr,"Var %d, index %d\n",i,dofs_for_elem[jj]);
+
 			unsigned int block_start = * std::min_element( dofs_for_elem.begin(), dofs_for_elem.end() );
 			VecSetValue(block_scaling,block_start,dofs_for_elem.size(),INSERT_VALUES);
-
 		}
-
-
 }
 
 
 void
 petscSetOptions(FEProblemBase & problem)
 {
-
-  //test new function
-	hypreSetVariableDiagonalBlockScaling(problem);
 
   // Reference to the options stored in FEPRoblem
   PetscOptions & petsc = problem.getPetscOptions();
@@ -336,6 +311,17 @@ petscSetOptions(FEProblemBase & problem)
     petscSetupDM(problem.getNonlinearSystemBase());
 
   addPetscOptionsFromCommandline();
+
+  for (unsigned int i=0;i<petsc.inames.size();++i){
+
+	  if(petsc.inames[i].compare("-pc_hypre_boomeramg_diag_scaling_block_size")==0){
+		  int block_scaling=stoi(petsc.values[i]);
+		  if (block_scaling==-1)
+			  hypreSetVariableDiagonalBlockScaling(problem);
+	  }
+
+  }
+
 }
 
 PetscErrorCode
