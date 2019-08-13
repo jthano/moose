@@ -22,6 +22,8 @@
 
 #include <petscksp.h>
 
+#include "libmesh/implicit_system.h"
+
 // Forward declarations
 class FEProblemBase;
 class NonlinearSystemBase;
@@ -53,6 +55,11 @@ public:
   /// Preconditioner description
   std::string pc_description;
 };
+
+void hypreAssociateVariableBlock(Mat matrix);
+
+void
+hypreResetVariableBlockScaling(ImplicitSystem & sys, Mat matrix);
 
 /**
  * A function for setting the PETSc options in PETSc from the options supplied to MOOSE

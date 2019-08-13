@@ -76,6 +76,8 @@ namespace Moose
 namespace PetscSupport
 {
 
+PetscVector<Number> * block_scaling=nullptr;
+
 std::string
 stringify(const LineSearchType & t)
 {
@@ -247,22 +249,22 @@ hypreSetVariableDiagonalBlockScaling(FEProblemBase & problem)
 	PetscMatrix<Number> * petsc_mat = dynamic_cast<PetscMatrix<Number> *>(imp_sys->matrix);
 
 	// Create a vector that is compatable with the system matrix
-	Vec block_scaling;
-	MatCreateVecs(petsc_mat->mat(), &block_scaling, nullptr);
+	//MatCreateVecs(petsc_mat->mat(), &block_scaling, nullptr);
 
-	VecZeroEntries(block_scaling);
+	if (! block_scaling)
+		block_scaling = new PetscVector<Number>(problem.comm());
 
-	// Associate the new vector with the system matrix so that is can be retrieved later
-	// by petsc functions that only have access to the Mat object
-	PetscObjectCompose((PetscObject)petsc_mat->mat(),"block_scaling_vector",(PetscObject) block_scaling);
+	block_scaling->init(imp_sys->n_dofs(), imp_sys->n_local_dofs(),false,PARALLEL);
 
+	block_scaling->zero();
+	//
 	//
 	// Now fill the vector with information about the "blocks" based on the mesh
 	// For now, the assumption is made that no element is split amongst different
 	// processors.
 	//
 	const DofMap & dof_map = imp_sys->get_dof_map();
-	//
+
 	//
 	//
 	unsigned int n_vars = imp_sys->n_vars();
@@ -273,14 +275,75 @@ hypreSetVariableDiagonalBlockScaling(FEProblemBase & problem)
 			std::vector<unsigned int> dofs_for_elem;
 			dof_map.dof_indices(elem,dofs_for_elem, i);
 
-			//for (int jj=0 ; jj<dofs_for_elem.size(); ++jj)
-			//	fprintf(stderr,"Var %d, index %d\n",i,dofs_for_elem[jj]);
+//			for (int jj=0 ; jj<dofs_for_elem.size(); ++jj)
+//				fprintf(stderr,"Var %d, index %d\n",i,dofs_for_elem[jj]);
 
 			unsigned int block_start = * std::min_element( dofs_for_elem.begin(), dofs_for_elem.end() );
-			VecSetValue(block_scaling,block_start,dofs_for_elem.size(),INSERT_VALUES);
+			VecSetValue(block_scaling->vec(),block_start,dofs_for_elem.size(),INSERT_VALUES);
 		}
+
+
+
+	if (petsc_mat->initialized())
+		PetscObjectCompose((PetscObject)petsc_mat->mat(),"block_scaling_vector",(PetscObject) block_scaling->vec());
 }
 
+
+void
+hypreResetVariableBlockScaling(ImplicitSystem & sys, Mat matrix)
+{
+
+	const DofMap & dof_map = sys.get_dof_map();
+
+	// Create a vector that is compatable with the system matrix
+	//MatCreateVecs(petsc_mat->mat(), &block_scaling, nullptr);
+
+	if (block_scaling)
+		delete block_scaling;
+
+	block_scaling = new PetscVector<Number>(sys.comm());
+
+	block_scaling->init(sys.n_dofs(), sys.n_local_dofs(),false,PARALLEL);
+
+	block_scaling->zero();
+
+	// VecZeroEntries(block_scaling);
+	//
+	// Now fill the vector with information about the "blocks" based on the mesh
+	// For now, the assumption is made that no element is split amongst different
+	// processors.
+	//
+
+
+	//
+	//
+
+	for (auto & elem: sys.get_mesh().active_local_element_ptr_range())
+	{
+			std::vector<unsigned int> dofs_for_elem;
+			dof_map.dof_indices(elem,dofs_for_elem);
+
+
+			unsigned int block_start = * std::min_element( dofs_for_elem.begin(), dofs_for_elem.end() );
+			VecSetValue(block_scaling->vec(),block_start,dofs_for_elem.size(),INSERT_VALUES);
+	}
+
+	std::cout<<"Printing vector::"<<std::endl;
+	VecView(block_scaling->vec() ,PETSC_VIEWER_STDOUT_WORLD);
+
+
+	PetscObjectCompose((PetscObject)matrix, "block_scaling_vector", (PetscObject) block_scaling->vec());
+
+
+}
+
+
+void
+hypreAssociateVariableBlock(Mat matrix)
+{
+
+	PetscObjectCompose((PetscObject)matrix,"block_scaling_vector",(PetscObject) block_scaling->vec());
+}
 
 void
 petscSetOptions(FEProblemBase & problem)
@@ -297,6 +360,12 @@ petscSetOptions(FEProblemBase & problem)
 #else
   PetscOptionsClear(PETSC_NULL);
 #endif
+
+  if (block_scaling)
+  {
+	  delete block_scaling;
+	  block_scaling = 0;
+  }
 
   setSolverOptions(problem.solverParams());
 
