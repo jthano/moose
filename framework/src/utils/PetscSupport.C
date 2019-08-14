@@ -328,10 +328,6 @@ hypreResetVariableBlockScaling(ImplicitSystem & sys, Mat matrix)
 			VecSetValue(block_scaling->vec(),block_start,dofs_for_elem.size(),INSERT_VALUES);
 	}
 
-	std::cout<<"Printing vector::"<<std::endl;
-	VecView(block_scaling->vec() ,PETSC_VIEWER_STDOUT_WORLD);
-
-
 	PetscObjectCompose((PetscObject)matrix, "block_scaling_vector", (PetscObject) block_scaling->vec());
 
 
