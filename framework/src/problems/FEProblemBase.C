@@ -807,7 +807,8 @@ FEProblemBase::initialSetup()
   // This replaces all prior updateDependObjects calls on the old user object warehouses.
   std::vector<UserObject *> userobjs;
   theWarehouse().query().condition<AttribSystem>("UserObject").queryInto(userobjs);
-  groupUserObjects(theWarehouse(), userobjs, depend_objects_ic, depend_objects_aux);
+  groupUserObjects(
+      theWarehouse(), getAuxiliarySystem(), _app.getExecuteOnEnum(), userobjs, depend_objects_ic);
 
   for (auto obj : userobjs)
     obj->initialSetup();
@@ -3718,12 +3719,7 @@ FEProblemBase::execute(const ExecFlagType & exec_type)
   computeUserObjects(exec_type, Moose::POST_AUX);
 
   if (exec_type != EXEC_INITIAL)
-  {
-    // Pre-ic UserObjects should execute along with the Post-aux group except on EXEC_INITIAL
-    computeUserObjects(exec_type, Moose::PRE_IC);
-
     executeControls(exec_type);
-  }
 
   // Return the current flag to None
   setCurrentExecuteOnFlag(EXEC_NONE);
@@ -3821,9 +3817,9 @@ FEProblemBase::computeUserObjectsInternal(const ExecFlagType & type,
   if (group == Moose::PRE_IC)
     query.condition<AttribPreIC>(true);
   else if (group == Moose::PRE_AUX)
-    query.condition<AttribPreAux>(true);
+    query.condition<AttribPreAux>(type);
   else if (group == Moose::POST_AUX)
-    query.condition<AttribPostAux>(true);
+    query.condition<AttribPostAux>(type);
 
   std::vector<GeneralUserObject *> genobjs;
   query.clone().condition<AttribInterfaces>(Interfaces::GeneralUserObject).queryInto(genobjs);
