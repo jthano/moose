@@ -225,6 +225,11 @@ public:
   virtual ArrayMooseVariable & getArrayVariable(const THREAD_ID tid,
                                                 const std::string & var_name) override;
 
+  virtual std::string arrayVariableComponent(const std::string & var_name, unsigned int i) override
+  {
+    return var_name + "_" + std::to_string(i);
+  }
+
   virtual bool hasScalarVariable(const std::string & var_name) const override;
   virtual MooseVariableScalar & getScalarVariable(const THREAD_ID tid,
                                                   const std::string & var_name) override;

@@ -741,7 +741,7 @@ SystemBase::addVariable(const std::string & var_type,
     // Build up the variable names
     std::vector<std::string> var_names;
     for (unsigned int i = 0; i < components; i++)
-      var_names.push_back(SubProblem::arrayVariableComponent(name, i));
+      var_names.push_back(_subproblem.arrayVariableComponent(name, i));
 
     // The number returned by libMesh is the _last_ variable number... we want to hold onto the
     // _first_
